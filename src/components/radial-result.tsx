@@ -1,4 +1,3 @@
-//컴포넌트 차트 랩핑
 'use client';
 
 import { Label, PolarGrid, PolarRadiusAxis, RadialBar, RadialBarChart } from 'recharts';
@@ -13,21 +12,25 @@ import {
 } from '@/components/ui/card';
 import { ChartContainer, type ChartConfig } from '@/components/ui/chart';
 
-export const description = '';
-
-const chartData = [{ browser: 'safari', visitors: 200, fill: 'var(--color-safari)' }];
+type RadialResultProps = {
+  value: number | null;
+};
 
 const chartConfig = {
-  visitors: {
-    label: 'Visitors',
+  value: {
+    label: '전력원단위',
   },
-  safari: {
-    label: 'Safari',
+  result: {
+    label: 'Result',
     color: 'var(--chart-2)',
   },
 } satisfies ChartConfig;
 
-export function RadialChart() {
+const MAX_VALUE = 530;
+
+export function RadialChart({ value }: RadialResultProps) {
+  const chartData = [{ name: 'result', value: value ?? 0, fill: 'var(--chart-2)' }];
+
   return (
     <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[250px]">
       <RadialBarChart
@@ -44,7 +47,7 @@ export function RadialChart() {
           className="first:fill-muted last:fill-background"
           polarRadius={[86, 74]}
         />
-        <RadialBar dataKey="visitors" background cornerRadius={10} />
+        <RadialBar dataKey="value" background cornerRadius={10} max={MAX_VALUE} />
         <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
           <Label
             content={({ viewBox }) => {
@@ -56,18 +59,19 @@ export function RadialChart() {
                       y={viewBox.cy}
                       className="fill-foreground text-4xl font-bold"
                     >
-                      {chartData[0].visitors.toLocaleString()}
+                      {value === null ? '--' : value.toLocaleString()}
                     </tspan>
                     <tspan
                       x={viewBox.cx}
                       y={(viewBox.cy || 0) + 24}
                       className="fill-muted-foreground"
                     >
-                      Visitors
+                      전력원단위
                     </tspan>
                   </text>
                 );
               }
+              return null;
             }}
           />
         </PolarRadiusAxis>
@@ -76,19 +80,21 @@ export function RadialChart() {
   );
 }
 
-export default function RadialResult() {
+export default function RadialResult({ value }: RadialResultProps) {
   return (
     <Card className="w-full flex flex-col">
       <CardHeader className="items-center pb-0">
         <CardTitle>전력원단위</CardTitle>
-        <CardDescription>총 전력 사용량/출강량</CardDescription>
+        <CardDescription>예측 결과</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0">
-        <RadialChart />
+        <RadialChart value={value} />
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm">
-        <div className="flex items-center gap-2 leading-none font-medium"></div>
-        <div className="text-muted-foreground leading-none"></div>
+        <div className="flex items-center gap-2 leading-none font-medium">
+          {value === null ? '예측 전' : '예측 완료'}
+        </div>
+        <div className="text-muted-foreground leading-none">슬라이더 값을 기준으로 예측합니다.</div>
       </CardFooter>
     </Card>
   );
