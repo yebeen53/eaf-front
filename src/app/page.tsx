@@ -2,12 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { getFeatures, predict } from '@/lib/api';
+import { getFeatures, predict, recommend } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import RadialResult from '@/components/radial-result';
 import { SliderControlled, type SliderItem } from '@/components/sliders-panel';
 import headerImage from '@/app/image.png';
 import { PARAM_DEFINITIONS } from '@/lib/params';
+
+function paramsToFeatures(values?: Record<string, number>) {
+  const features: Record<string, number> = {};
+  for (const p of PARAM_DEFINITIONS) {
+    const v = values?.[p.key];
+    features[p.key] = Number.isFinite(v) ? v! : p.mean; // 값 없으면 mean
+  }
+  return features;
+}
 
 const createSliders = (): SliderItem[] => {
   return PARAM_DEFINITIONS.map((param) => ({
@@ -25,6 +34,8 @@ export default function Page() {
   const [consumeRate, setConsumeRate] = useState<number | null>(null);
   const [isPredicting, setIsPredicting] = useState(false);
   const [predictError, setPredictError] = useState<string | null>(null);
+  const [isRecommending, setIsRecommending] = useState(false);
+  const [recommendError, setRecommendError] = useState<string | null>(null);
 
   useEffect(() => {
     getFeatures()
@@ -39,19 +50,47 @@ export default function Page() {
     setIsPredicting(true);
     setPredictError(null);
     try {
-      const featureNames =
-        features && features.length > 0 ? features : sliders.map((slider) => slider.label);
       const payload: Record<string, number> = {};
-      featureNames.forEach((name, index) => {
-        payload[name] = sliders[index]?.value ?? 0;
+      PARAM_DEFINITIONS.forEach((param, index) => {
+        payload[param.key] = sliders[index]?.value ?? param.mean;
       });
       const result = await predict(payload);
       setConsumeRate(result.consume_rate);
     } catch (error) {
       console.error(error);
-      setPredictError('예측에 실패했습니다.');
+      setPredictError('\uc608\uce21\uc5d0 \uc2e4\ud328\ud588\uc2b5\ub2c8\ub2e4.');
     } finally {
       setIsPredicting(false);
+    }
+  };
+
+  const handleRecommend = async () => {
+    setIsRecommending(true);
+    setRecommendError(null);
+    try {
+      const payload: Record<string, number> = {};
+      PARAM_DEFINITIONS.forEach((param, index) => {
+        payload[param.key] = sliders[index]?.value ?? param.mean;
+      });
+      const searchSpace = Object.fromEntries(
+        PARAM_DEFINITIONS.map((param) => [
+          param.key,
+          { min: param.min, max: param.max, step: param.step, fixed: false },
+        ]),
+      );
+      const result = await recommend(payload, searchSpace, 200);
+      setConsumeRate(result.consume_rate);
+      setSliders((prev) =>
+        prev.map((slider) => ({
+          ...slider,
+          value: result.recommended_setting[slider.label] ?? slider.value,
+        })),
+      );
+    } catch (error) {
+      console.error(error);
+      setRecommendError('\ucd5c\uc801\ud654\uc5d0 \uc2e4\ud328\ud588\uc2b5\ub2c8\ub2e4.');
+    } finally {
+      setIsRecommending(false);
     }
   };
 
@@ -82,22 +121,31 @@ export default function Page() {
                   onClick={handlePredict}
                   disabled={isPredicting}
                 >
-                  {isPredicting ? '예측 중...' : '전력원단위 예측'}
+                  {isPredicting
+                    ? '\uc608\uce21 \uc911...'
+                    : '\uc804\ub825\uc6d0\ub2e8\uc704 \uc608\uce21'}
                 </button>
                 <button
                   type="button"
                   className="btn btn-outline-dark btn-lg w-100 py-3"
                   style={{ maxWidth: '520px' }}
+                  onClick={handleRecommend}
+                  disabled={isRecommending}
                 >
-                  전력원단위 최적화
+                  {isRecommending
+                    ? '\ucd5c\uc801\ud654 \uc911...'
+                    : '\uc804\ub825\uc6d0\ub2e8\uc704 \ucd5c\uc801\ud654'}
                 </button>
                 {predictError ? <div className="text-danger text-sm">{predictError}</div> : null}
+                {recommendError ? (
+                  <div className="text-danger text-sm">{recommendError}</div>
+                ) : null}
               </CardContent>
             </Card>
           </div>
           <Card className="w-full">
             <CardHeader>
-              <CardTitle>조절인자</CardTitle>
+              <CardTitle>{'\uc870\uc808\uc778\uc790'}</CardTitle>
             </CardHeader>
             <CardContent>
               <SliderControlled sliders={sliders} onChange={setSliders} />
