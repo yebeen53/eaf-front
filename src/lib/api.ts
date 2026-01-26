@@ -13,17 +13,33 @@ export async function predict(features: Record<string, number>) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ features }),
   });
-  if (!res.ok) throw new Error('Predict failed');
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error('Predict failed:', res.status, errorBody);
+    throw new Error('Predict failed');
+  }
   return res.json() as Promise<{ consume_rate: number }>;
 }
 
-export async function recommend(baseInput: Record<string, number>) {
+export async function recommend(
+  baseInput: Record<string, number>,
+  searchSpace: Record<string, { min: number; max: number; step: number; fixed?: boolean }>,
+  nTrials: number,
+) {
   const res = await fetch(`${API_BASE}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base_input: baseInput }),
+    body: JSON.stringify({
+      base_input: baseInput,
+      search_space: searchSpace,
+      n_trials: nTrials,
+    }),
   });
-  if (!res.ok) throw new Error('Recommend failed');
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error('Recommend failed:', res.status, errorBody);
+    throw new Error('Recommend failed');
+  }
   return res.json() as Promise<{
     recommended_setting: Record<string, number>;
     consume_rate: number;
