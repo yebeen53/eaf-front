@@ -25,6 +25,7 @@ const createSliders = (): SliderItem[] => {
     max: param.max,
     step: param.step,
     value: param.mean,
+    fixed: false,
   }));
 };
 
@@ -73,9 +74,14 @@ export default function Page() {
         payload[param.key] = sliders[index]?.value ?? param.mean;
       });
       const searchSpace = Object.fromEntries(
-        PARAM_DEFINITIONS.map((param) => [
-          param.key,
-          { min: param.min, max: param.max, step: param.step, fixed: false },
+        sliders.map((slider) => [
+          slider.label,
+          {
+            min: slider.min,
+            max: slider.max,
+            step: slider.step,
+            fixed: slider.fixed,
+          },
         ]),
       );
       const result = await recommend(payload, searchSpace, 200);
