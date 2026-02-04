@@ -18,13 +18,24 @@ export async function predict(features: Record<string, number>) {
     console.error('Predict failed:', res.status, errorBody);
     throw new Error('Predict failed');
   }
-  return res.json() as Promise<{ consume_rate: number }>;
+  return res.json() as Promise<{
+    melting_wattage: number;
+    refining_wattage: number;
+    wattage_tmp: number;
+    tot_result1: number;
+    tot_result4: number;
+  }>;
 }
 
 export async function recommend(
   baseInput: Record<string, number>,
   searchSpace: Record<string, { min: number; max: number; step: number; fixed?: boolean }>,
   nTrials: number,
+  options?: {
+    earlyStopPatience?: number;
+    timeoutSeconds?: number;
+    objectiveTarget?: string;
+  },
 ) {
   const res = await fetch(`${API_BASE}/recommend`, {
     method: 'POST',
@@ -33,6 +44,9 @@ export async function recommend(
       base_input: baseInput,
       search_space: searchSpace,
       n_trials: nTrials,
+      early_stop_patience: options?.earlyStopPatience,
+      timeout_seconds: options?.timeoutSeconds,
+      objective_target: options?.objectiveTarget,
     }),
   });
   if (!res.ok) {
@@ -42,7 +56,14 @@ export async function recommend(
   }
   return res.json() as Promise<{
     recommended_setting: Record<string, number>;
-    consume_rate: number;
+    melting_wattage: number;
+    refining_wattage: number;
+    wattage_tmp: number;
+    tot_result1: number;
+    tot_result4: number;
+    objective_target: string;
+    objective_value: number;
     num_candidates: number;
+    num_trials: number;
   }>;
 }
