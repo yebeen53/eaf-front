@@ -74,10 +74,7 @@ export function MetricValueList({
   return (
     <div className="grid grid-cols-1 gap-4 text-lg">
       {metrics.map((key) => (
-        <div
-          key={key}
-          className="flex items-center justify-between rounded-md border px-4 py-3"
-        >
+        <div key={key} className="flex items-center justify-between rounded-md border px-4 py-3">
           <span className="text-muted-foreground">{METRIC_LABELS[key]}</span>
           <span className="text-xl font-semibold">
             {result?.[key] === undefined ? '--' : formatMetricValue(key, result[key]!)}
@@ -102,10 +99,7 @@ function RadialChart({
   const chartData = [{ name: 'result', value: value ?? 0, fill: 'var(--chart-2)' }];
 
   return (
-    <ChartContainer
-      config={chartConfig}
-      className="mx-auto aspect-square w-full max-w-[250px]"
-    >
+    <ChartContainer config={chartConfig} className="mx-auto aspect-square w-full max-w-[250px]">
       <RadialBarChart
         data={chartData}
         startAngle={0}
@@ -163,8 +157,7 @@ export default function RadialResult({
 }: RadialResultProps) {
   const value = result?.[selectedMetric] ?? null;
   const max = METRIC_MAX[selectedMetric];
-  const displayValue =
-    value === null ? '--' : formatMetricValue(selectedMetric, value);
+  const displayValue = value === null ? '--' : formatMetricValue(selectedMetric, value);
 
   return (
     <Card className="w-full flex flex-col">
@@ -187,7 +180,7 @@ export default function RadialResult({
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm">
         <div className="flex items-center gap-2 leading-none font-medium">
-          {value === null ? '대기 중' : statusLabel ?? '예측 완료'}
+          {value === null ? '대기 중' : (statusLabel ?? '예측 완료')}
         </div>
         {objectiveTarget && objectiveValue != null ? (
           <div className="text-muted-foreground leading-none">
