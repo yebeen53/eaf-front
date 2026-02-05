@@ -16,9 +16,7 @@ import { ChartContainer, type ChartConfig } from '@/components/ui/chart';
 export type MetricKey =
   | 'melting_wattage'
   | 'refining_wattage'
-  | 'wattage_tmp'
-  | 'tot_result1'
-  | 'tot_result4';
+  | 'wattage_tmp';
 
 export type ResultMetrics = Partial<Record<MetricKey, number>>;
 
@@ -35,16 +33,12 @@ const METRIC_LABELS: Record<MetricKey, string> = {
   melting_wattage: '용해 전력',
   refining_wattage: '정련 전력',
   wattage_tmp: '전력 합계',
-  tot_result1: '출강량',
-  tot_result4: '회수율',
 };
 
 const METRIC_MAX: Record<MetricKey, number> = {
   melting_wattage: 2000,
   refining_wattage: 2000,
   wattage_tmp: 3000,
-  tot_result1: 500,
-  tot_result4: 1,
 };
 
 const chartConfig = {
@@ -57,12 +51,8 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-const formatMetricValue = (key: MetricKey, value: number) => {
-  if (key === 'tot_result4') {
-    return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  }
-  return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
-};
+const formatMetricValue = (_key: MetricKey, value: number) =>
+  value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 export function MetricValueList({
   result,

@@ -27,19 +27,17 @@ const buildFeaturePayload = (values: Record<string, number>, allFeatures: string
   if (allFeatures) {
     for (const key of allFeatures) {
       if (!(key in payload)) {
-        payload[key] = 0;
+        payload[key] = DEFAULT_FEATURE_VALUES[key] ?? 0;
       }
     }
   }
   return payload;
 };
 
-const filterOutScrap = (items: string[]) => {
-  return items.filter((key) => !key.toLowerCase().startsWith('scrap'));
-};
+const isScrapKey = (key: string) => key.toLowerCase().startsWith('scrap');
 
 const createSliders = (): SliderItem[] => {
-  return PARAM_DEFINITIONS.map((param) => ({
+  return PARAM_DEFINITIONS.filter((param) => !isScrapKey(param.key)).map((param) => ({
     label: param.key,
     min: param.min,
     max: param.max,
@@ -49,18 +47,18 @@ const createSliders = (): SliderItem[] => {
   }));
 };
 
+const DEFAULT_FEATURE_VALUES = Object.fromEntries(
+  PARAM_DEFINITIONS.map((param) => [param.key, param.mean]),
+) as Record<string, number>;
+
 const METRIC_RESULT_KEYS: MetricKey[] = [
   'melting_wattage',
   'refining_wattage',
-  'tot_result1',
-  'tot_result4',
 ];
 const METRIC_KEY_SET = new Set<MetricKey>([
   'melting_wattage',
   'refining_wattage',
   'wattage_tmp',
-  'tot_result1',
-  'tot_result4',
 ]);
 
 const toMetricKey = (value: string): MetricKey | null => {
@@ -68,6 +66,17 @@ const toMetricKey = (value: string): MetricKey | null => {
     return value as MetricKey;
   }
   return null;
+};
+
+const normalizeResult = (data: ResultMetrics): ResultMetrics => {
+  if (data.wattage_tmp === undefined) {
+    const melting = data.melting_wattage;
+    const refining = data.refining_wattage;
+    if (typeof melting === 'number' && typeof refining === 'number') {
+      return { ...data, wattage_tmp: melting + refining };
+    }
+  }
+  return data;
 };
 
 export default function Page() {
@@ -84,7 +93,7 @@ export default function Page() {
 
   useEffect(() => {
     getFeatures()
-      .then((r) => setFeatures(filterOutScrap(r.features)))
+      .then((r) => setFeatures(r.features))
       .catch((e) => {
         console.error(e);
         setFeatures([]);
@@ -103,7 +112,7 @@ export default function Page() {
         payload[param.key] = sliders[index]?.value ?? param.mean;
       });
       const result = await predict(buildFeaturePayload(payload, features));
-      setResult(result);
+      setResult(normalizeResult(result));
       setObjectiveTarget(null);
       setObjectiveValue(null);
       setResultStatusLabel('예측 완료');
@@ -140,7 +149,7 @@ export default function Page() {
         ]),
       );
       const result = await recommend(buildFeaturePayload(payload, features), searchSpace, 200);
-      setResult(result);
+      setResult(normalizeResult(result));
       setObjectiveTarget(toMetricKey(result.objective_target));
       setObjectiveValue(result.objective_value);
       setResultStatusLabel('최적화 완료');

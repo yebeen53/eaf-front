@@ -22,8 +22,6 @@ export async function predict(features: Record<string, number>) {
     melting_wattage: number;
     refining_wattage: number;
     wattage_tmp: number;
-    tot_result1: number;
-    tot_result4: number;
   }>;
 }
 
@@ -59,8 +57,6 @@ export async function recommend(
     melting_wattage: number;
     refining_wattage: number;
     wattage_tmp: number;
-    tot_result1: number;
-    tot_result4: number;
     objective_target: string;
     objective_value: number;
     num_candidates: number;
