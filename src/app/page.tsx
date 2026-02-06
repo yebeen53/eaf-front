@@ -11,13 +11,18 @@ import RadialResult, {
 } from '@/components/radial-result';
 import { SliderControlled, type SliderItem } from '@/components/sliders-panel';
 import headerImage from '@/app/image.png';
-import { ADJUSTABLE_PARAM_KEYS, PARAM_DEFINITIONS } from '@/lib/params';
+import { ADJUSTABLE_PARAM_KEYS, PARAM_DEFINITIONS, type ParamDefinition } from '@/lib/params';
+
+const ADJUSTABLE_PARAM_KEY_SET = new Set(ADJUSTABLE_PARAM_KEYS);
+
+const getDefaultParamValue = (param: ParamDefinition) =>
+  ADJUSTABLE_PARAM_KEY_SET.has(param.key) ? param.mean : param.median;
 
 function paramsToFeatures(values?: Record<string, number>) {
   const features: Record<string, number> = {};
   for (const p of PARAM_DEFINITIONS) {
     const v = values?.[p.key];
-    features[p.key] = Number.isFinite(v) ? v! : p.mean;
+    features[p.key] = Number.isFinite(v) ? v! : getDefaultParamValue(p);
   }
   return features;
 }
@@ -61,8 +66,23 @@ const createSliders = (): SliderItem[] => {
 };
 
 const DEFAULT_FEATURE_VALUES = Object.fromEntries(
-  PARAM_DEFINITIONS.map((param) => [param.key, param.mean]),
+  PARAM_DEFINITIONS.map((param) => [param.key, getDefaultParamValue(param)]),
 ) as Record<string, number>;
+
+const buildPayloadFromSliders = (sliders: SliderItem[]) => {
+  const sliderValueByKey = Object.fromEntries(sliders.map((slider) => [slider.label, slider.value]));
+  const payload: Record<string, number> = {};
+
+  PARAM_DEFINITIONS.forEach((param) => {
+    const sliderValue = sliderValueByKey[param.key];
+    payload[param.key] =
+      typeof sliderValue === 'number' && Number.isFinite(sliderValue)
+        ? sliderValue
+        : getDefaultParamValue(param);
+  });
+
+  return payload;
+};
 
 const METRIC_RESULT_KEYS: MetricKey[] = [
   'melting_wattage',
@@ -92,6 +112,11 @@ const normalizeResult = (data: ResultMetrics): ResultMetrics => {
   return data;
 };
 
+const getFeatureUnavailableMessage = (currentFeatures: string[] | null) =>
+  currentFeatures === null
+    ? 'feature 목록을 불러오는 중입니다.'
+    : 'feature 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
+
 export default function Page() {
   const [sliders, setSliders] = useState<SliderItem[]>(() => createSliders());
   const [features, setFeatures] = useState<string[] | null>(null);
@@ -103,6 +128,7 @@ export default function Page() {
   const [predictError, setPredictError] = useState<string | null>(null);
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendError, setRecommendError] = useState<string | null>(null);
+  const isFeatureReady = Array.isArray(features) && features.length > 0;
 
   useEffect(() => {
     getFeatures()
@@ -114,20 +140,16 @@ export default function Page() {
   }, []);
 
   const handlePredict = async () => {
-    setIsPredicting(true);
     setPredictError(null);
+    const currentFeatures = features;
+    if (!currentFeatures || currentFeatures.length === 0) {
+      setPredictError(getFeatureUnavailableMessage(currentFeatures));
+      return;
+    }
+    setIsPredicting(true);
     try {
-      if (features === null) {
-        throw new Error('features_not_ready');
-      }
-      const payload: Record<string, number> = {};
-      const sliderValueByKey = Object.fromEntries(
-        sliders.map((slider) => [slider.label, slider.value]),
-      );
-      PARAM_DEFINITIONS.forEach((param) => {
-        payload[param.key] = sliderValueByKey[param.key] ?? param.mean;
-      });
-      const result = await predict(buildFeaturePayload(payload, features));
+      const payload = buildPayloadFromSliders(sliders);
+      const result = await predict(buildFeaturePayload(payload, currentFeatures));
       setResult(normalizeResult(result));
       setObjectiveTarget(null);
       setObjectiveValue(null);
@@ -143,19 +165,15 @@ export default function Page() {
   };
 
   const handleRecommend = async () => {
-    setIsRecommending(true);
     setRecommendError(null);
+    const currentFeatures = features;
+    if (!currentFeatures || currentFeatures.length === 0) {
+      setRecommendError(getFeatureUnavailableMessage(currentFeatures));
+      return;
+    }
+    setIsRecommending(true);
     try {
-      if (features === null) {
-        throw new Error('features_not_ready');
-      }
-      const payload: Record<string, number> = {};
-      const sliderValueByKey = Object.fromEntries(
-        sliders.map((slider) => [slider.label, slider.value]),
-      );
-      PARAM_DEFINITIONS.forEach((param) => {
-        payload[param.key] = sliderValueByKey[param.key] ?? param.mean;
-      });
+      const payload = buildPayloadFromSliders(sliders);
       const searchSpace = Object.fromEntries(
         sliders.map((slider) => [
           slider.label,
@@ -167,7 +185,7 @@ export default function Page() {
           },
         ]),
       );
-      const result = await recommend(buildFeaturePayload(payload, features), searchSpace, 200);
+      const result = await recommend(buildFeaturePayload(payload, currentFeatures), searchSpace, 200);
       setResult(normalizeResult(result));
       setObjectiveTarget(toMetricKey(result.objective_target));
       setObjectiveValue(result.objective_value);
@@ -215,7 +233,7 @@ export default function Page() {
                     className="btn btn-outline-dark btn-lg w-100 py-3"
                     style={{ maxWidth: '520px' }}
                     onClick={handlePredict}
-                    disabled={isPredicting}
+                    disabled={isPredicting || !isFeatureReady}
                   >
                     {isPredicting ? '예측 중...' : '예측'}
                   </button>
@@ -224,7 +242,7 @@ export default function Page() {
                     className="btn btn-outline-dark btn-lg w-100 py-3"
                     style={{ maxWidth: '520px' }}
                     onClick={handleRecommend}
-                    disabled={isRecommending}
+                    disabled={isRecommending || !isFeatureReady}
                   >
                     {isRecommending ? '최적화 중...' : '최적화'}
                   </button>
