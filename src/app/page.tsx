@@ -11,7 +11,7 @@ import RadialResult, {
 } from '@/components/radial-result';
 import { SliderControlled, type SliderItem } from '@/components/sliders-panel';
 import headerImage from '@/app/image.png';
-import { PARAM_DEFINITIONS } from '@/lib/params';
+import { ADJUSTABLE_PARAM_KEYS, PARAM_DEFINITIONS } from '@/lib/params';
 
 function paramsToFeatures(values?: Record<string, number>) {
   const features: Record<string, number> = {};
@@ -24,27 +24,40 @@ function paramsToFeatures(values?: Record<string, number>) {
 
 const buildFeaturePayload = (values: Record<string, number>, allFeatures: string[] | null) => {
   const payload = paramsToFeatures(values);
-  if (allFeatures) {
-    for (const key of allFeatures) {
-      if (!(key in payload)) {
-        payload[key] = DEFAULT_FEATURE_VALUES[key] ?? 0;
-      }
-    }
+  if (!allFeatures) {
+    return payload;
   }
-  return payload;
+  const filtered: Record<string, number> = {};
+  for (const key of allFeatures) {
+    const value = payload[key];
+    filtered[key] =
+      typeof value === 'number' && Number.isFinite(value)
+        ? value
+        : DEFAULT_FEATURE_VALUES[key] ?? 0;
+  }
+  return filtered;
 };
 
 const isScrapKey = (key: string) => key.toLowerCase().startsWith('scrap');
 
 const createSliders = (): SliderItem[] => {
-  return PARAM_DEFINITIONS.filter((param) => !isScrapKey(param.key)).map((param) => ({
-    label: param.key,
-    min: param.min,
-    max: param.max,
-    step: param.step,
-    value: param.mean,
-    fixed: false,
-  }));
+  return ADJUSTABLE_PARAM_KEYS.filter((key) => !isScrapKey(key)).flatMap((key) => {
+    const param = PARAM_DEFINITIONS.find((item) => item.key === key);
+    if (!param) {
+      console.warn(`[params] Missing definition for adjustable key: ${key}`);
+      return [];
+    }
+    return [
+      {
+        label: param.key,
+        min: param.min,
+        max: param.max,
+        step: param.step ?? 1,
+        value: param.mean,
+        fixed: false,
+      },
+    ];
+  });
 };
 
 const DEFAULT_FEATURE_VALUES = Object.fromEntries(
@@ -108,8 +121,11 @@ export default function Page() {
         throw new Error('features_not_ready');
       }
       const payload: Record<string, number> = {};
-      PARAM_DEFINITIONS.forEach((param, index) => {
-        payload[param.key] = sliders[index]?.value ?? param.mean;
+      const sliderValueByKey = Object.fromEntries(
+        sliders.map((slider) => [slider.label, slider.value]),
+      );
+      PARAM_DEFINITIONS.forEach((param) => {
+        payload[param.key] = sliderValueByKey[param.key] ?? param.mean;
       });
       const result = await predict(buildFeaturePayload(payload, features));
       setResult(normalizeResult(result));
@@ -134,8 +150,11 @@ export default function Page() {
         throw new Error('features_not_ready');
       }
       const payload: Record<string, number> = {};
-      PARAM_DEFINITIONS.forEach((param, index) => {
-        payload[param.key] = sliders[index]?.value ?? param.mean;
+      const sliderValueByKey = Object.fromEntries(
+        sliders.map((slider) => [slider.label, slider.value]),
+      );
+      PARAM_DEFINITIONS.forEach((param) => {
+        payload[param.key] = sliderValueByKey[param.key] ?? param.mean;
       });
       const searchSpace = Object.fromEntries(
         sliders.map((slider) => [

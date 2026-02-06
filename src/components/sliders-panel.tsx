@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 
@@ -13,6 +12,11 @@ export type SliderItem = {
   step: number;
   value: number;
   fixed: boolean;
+};
+
+const formatSliderValue = (value: number) => {
+  const rounded = Math.round(value * 1000) / 1000;
+  return rounded.toFixed(3).replace(/\.?0+$/, '');
 };
 
 type SliderControlledProps = {
@@ -37,7 +41,9 @@ export function SliderControlled({ sliders, onChange }: SliderControlledProps) {
           </CardHeader>
           <CardContent className="grid gap-2">
             <div className="flex items-center justify-end gap-2">
-              <span className="text-muted-foreground text-sm">{slider.value}</span>
+              <span className="text-muted-foreground text-sm">
+                {formatSliderValue(slider.value)}
+              </span>
             </div>
             <div className="flex items-center justify-end gap-2">
               <Switch
