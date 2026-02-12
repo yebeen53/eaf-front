@@ -12,6 +12,7 @@ export type ParamDefinition = {
 
 const CONTROL_VAR_STATS = controlVarsStats as ParamDefinition[];
 const ALL_FEATURE_STATS = allFeatureStats as ParamDefinition[];
+const CONTROL_VAR_STATS_BY_KEY = new Map(CONTROL_VAR_STATS.map((param) => [param.key, param]));
 
 export const ADJUSTABLE_PARAM_KEYS = CONTROL_VAR_STATS.map((param) => param.key);
 
@@ -19,8 +20,18 @@ const ALL_FEATURE_KEY_SET = new Set(ALL_FEATURE_STATS.map((param) => param.key))
 const missingControlKeys = ADJUSTABLE_PARAM_KEYS.filter((key) => !ALL_FEATURE_KEY_SET.has(key));
 if (missingControlKeys.length > 0) {
   console.warn(
-    `[params] Missing keys in all_feature_stats.json: ${missingControlKeys.join(', ')}`,
+    `[params] Missing keys in all_feature_stats.json (fallback to control_vars_stats.json): ${missingControlKeys.join(', ')}`,
   );
 }
 
-export const PARAM_DEFINITIONS: ParamDefinition[] = ALL_FEATURE_STATS;
+const mergedParamDefinitions = ALL_FEATURE_STATS.map(
+  (param) => CONTROL_VAR_STATS_BY_KEY.get(param.key) ?? param,
+);
+
+for (const controlParam of CONTROL_VAR_STATS) {
+  if (!ALL_FEATURE_KEY_SET.has(controlParam.key)) {
+    mergedParamDefinitions.push(controlParam);
+  }
+}
+
+export const PARAM_DEFINITIONS: ParamDefinition[] = mergedParamDefinitions;

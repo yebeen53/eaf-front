@@ -1,5 +1,31 @@
 // lib/api.ts
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000';
+function normalizeApiBase(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return 'http://localhost:8000';
+  const withProtocol = trimmed.includes('://') ? trimmed : `http://${trimmed}`;
+  return withProtocol.replace(/\/+$/, '');
+}
+
+function getAutoApiBase(): string {
+  if (typeof window === 'undefined') {
+    return 'http://localhost:8000';
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+  const rawHostname = window.location.hostname || 'localhost';
+  const hostname = rawHostname.includes(':') ? `[${rawHostname}]` : rawHostname;
+  return `${protocol}://${hostname}:8000`;
+}
+
+function resolveApiBase(): string {
+  const configured = (process.env.NEXT_PUBLIC_API_BASE ?? '').trim();
+  if (configured) {
+    return normalizeApiBase(configured);
+  }
+  return normalizeApiBase(getAutoApiBase());
+}
+
+const API_BASE = resolveApiBase();
 
 export async function getFeatures() {
   const res = await fetch(`${API_BASE}/predict/features`);
