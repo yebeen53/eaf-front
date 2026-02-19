@@ -16,9 +16,10 @@ import { ChartContainer, type ChartConfig } from '@/components/ui/chart';
 export type MetricKey =
   | 'melting_wattage'
   | 'refining_wattage'
-  | 'wattage_tmp';
+  | 'wattage_tmp'
+  | 'tot_result1';
 
-export type ResultMetrics = Partial<Record<MetricKey, number>>;
+export type ResultMetrics = Partial<Record<MetricKey, number | null>>;
 
 type RadialResultProps = {
   result: ResultMetrics | null;
@@ -30,12 +31,14 @@ type RadialResultProps = {
 };
 
 const METRIC_LABELS: Record<MetricKey, string> = {
+  tot_result1: '출강량',
   melting_wattage: '용해 전력',
   refining_wattage: '정련 전력',
   wattage_tmp: '전력 합계',
 };
 
 const METRIC_MAX: Record<MetricKey, number> = {
+  tot_result1: 130,
   melting_wattage: 2000,
   refining_wattage: 2000,
   wattage_tmp: 3000,
@@ -54,6 +57,9 @@ const chartConfig = {
 const formatMetricValue = (_key: MetricKey, value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 
+const isFiniteMetricValue = (value: number | null | undefined): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
 export function MetricValueList({
   result,
   metrics,
@@ -67,7 +73,7 @@ export function MetricValueList({
         <div key={key} className="flex items-center justify-between rounded-md border px-4 py-3">
           <span className="text-muted-foreground">{METRIC_LABELS[key]}</span>
           <span className="text-xl font-semibold">
-            {result?.[key] === undefined ? '--' : formatMetricValue(key, result[key]!)}
+            {isFiniteMetricValue(result?.[key]) ? formatMetricValue(key, result[key]) : '--'}
           </span>
         </div>
       ))}
@@ -145,7 +151,8 @@ export default function RadialResult({
   objectiveValue,
   actions,
 }: RadialResultProps) {
-  const value = result?.[selectedMetric] ?? null;
+  const selectedValue = result?.[selectedMetric];
+  const value = isFiniteMetricValue(selectedValue) ? selectedValue : null;
   const max = METRIC_MAX[selectedMetric];
   const displayValue = value === null ? '--' : formatMetricValue(selectedMetric, value);
 

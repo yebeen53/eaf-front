@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 
 export type SliderItem = {
   label: string;
+  displayLabel?: string;
   min: number;
   max: number;
   step: number;
@@ -31,7 +32,7 @@ export function SliderControlled({ sliders, onChange }: SliderControlledProps) {
         <Card key={index} className="w-full">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
-              <span>{slider.label}</span>
+              <span>{slider.displayLabel ?? slider.label}</span>
               {slider.fixed ? (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   고정

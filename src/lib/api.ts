@@ -27,13 +27,42 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
-export async function getFeatures() {
+export type FeatureListResponse = {
+  features: string[];
+};
+
+export type PredictResponse = {
+  melting_wattage: number;
+  refining_wattage: number;
+  wattage_tmp: number;
+  tot_result1?: number | null;
+};
+
+export type RecommendResponse = {
+  recommended_setting: Record<string, number>;
+  melting_wattage: number;
+  refining_wattage: number;
+  wattage_tmp: number;
+  tot_result1?: number | null;
+  objective_target: string;
+  objective_value: number;
+  num_candidates: number;
+  num_trials: number;
+};
+
+export async function getFeatures(): Promise<FeatureListResponse> {
   const res = await fetch(`${API_BASE}/predict/features`);
   if (!res.ok) throw new Error('Failed to load features');
-  return res.json() as Promise<{ features: string[] }>;
+  return res.json() as Promise<FeatureListResponse>;
 }
 
-export async function predict(features: Record<string, number>) {
+export async function getControllableFeatures(): Promise<FeatureListResponse> {
+  const res = await fetch(`${API_BASE}/predict/controllable-features`);
+  if (!res.ok) throw new Error('Failed to load controllable features');
+  return res.json() as Promise<FeatureListResponse>;
+}
+
+export async function predict(features: Record<string, number>): Promise<PredictResponse> {
   const res = await fetch(`${API_BASE}/predict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -44,11 +73,7 @@ export async function predict(features: Record<string, number>) {
     console.error('Predict failed:', res.status, errorBody);
     throw new Error('Predict failed');
   }
-  return res.json() as Promise<{
-    melting_wattage: number;
-    refining_wattage: number;
-    wattage_tmp: number;
-  }>;
+  return res.json() as Promise<PredictResponse>;
 }
 
 export async function recommend(
@@ -60,7 +85,7 @@ export async function recommend(
     timeoutSeconds?: number;
     objectiveTarget?: string;
   },
-) {
+): Promise<RecommendResponse> {
   const res = await fetch(`${API_BASE}/recommend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -78,14 +103,14 @@ export async function recommend(
     console.error('Recommend failed:', res.status, errorBody);
     throw new Error('Recommend failed');
   }
-  return res.json() as Promise<{
-    recommended_setting: Record<string, number>;
-    melting_wattage: number;
-    refining_wattage: number;
-    wattage_tmp: number;
-    objective_target: string;
-    objective_value: number;
-    num_candidates: number;
-    num_trials: number;
-  }>;
+  return res.json() as Promise<RecommendResponse>;
 }
+
+const apiClient = {
+  getFeatures,
+  getControllableFeatures,
+  predict,
+  recommend,
+};
+
+export default apiClient;

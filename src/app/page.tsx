@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { getFeatures, predict, recommend } from '@/lib/api';
+import * as apiClient from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import RadialResult, {
   MetricValueList,
@@ -38,23 +38,38 @@ const buildFeaturePayload = (values: Record<string, number>, allFeatures: string
     filtered[key] =
       typeof value === 'number' && Number.isFinite(value)
         ? value
-        : DEFAULT_FEATURE_VALUES[key] ?? 0;
+        : (DEFAULT_FEATURE_VALUES[key] ?? 0);
   }
   return filtered;
 };
 
 const isScrapKey = (key: string) => key.toLowerCase().startsWith('scrap');
 
+const EXTRA_SLIDER_OVERRIDES: Record<string, { displayLabel?: string }> = {
+  Weight_Sum: { displayLabel: 'weight_sum' },
+};
+
 const createSliders = (): SliderItem[] => {
-  return ADJUSTABLE_PARAM_KEYS.filter((key) => !isScrapKey(key)).flatMap((key) => {
+  const sliderKeys = Array.from(
+    new Set([
+      ...ADJUSTABLE_PARAM_KEYS.filter((key) => !isScrapKey(key)),
+      ...Object.keys(EXTRA_SLIDER_OVERRIDES),
+    ]),
+  );
+
+  return sliderKeys.flatMap((key) => {
     const param = PARAM_DEFINITIONS.find((item) => item.key === key);
     if (!param) {
-      console.warn(`[params] Missing definition for adjustable key: ${key}`);
+      console.warn(`[params] Missing definition for slider key: ${key}`);
       return [];
     }
+
+    const sliderOverride = EXTRA_SLIDER_OVERRIDES[param.key];
+
     return [
       {
         label: param.key,
+        displayLabel: sliderOverride?.displayLabel,
         min: param.min,
         max: param.max,
         step: param.step ?? 1,
@@ -70,7 +85,9 @@ const DEFAULT_FEATURE_VALUES = Object.fromEntries(
 ) as Record<string, number>;
 
 const buildPayloadFromSliders = (sliders: SliderItem[]) => {
-  const sliderValueByKey = Object.fromEntries(sliders.map((slider) => [slider.label, slider.value]));
+  const sliderValueByKey = Object.fromEntries(
+    sliders.map((slider) => [slider.label, slider.value]),
+  );
   const payload: Record<string, number> = {};
 
   PARAM_DEFINITIONS.forEach((param) => {
@@ -84,14 +101,12 @@ const buildPayloadFromSliders = (sliders: SliderItem[]) => {
   return payload;
 };
 
-const METRIC_RESULT_KEYS: MetricKey[] = [
-  'melting_wattage',
-  'refining_wattage',
-];
+const METRIC_RESULT_KEYS: MetricKey[] = ['melting_wattage', 'refining_wattage', 'tot_result1'];
 const METRIC_KEY_SET = new Set<MetricKey>([
   'melting_wattage',
   'refining_wattage',
   'wattage_tmp',
+  'tot_result1',
 ]);
 
 const toMetricKey = (value: string): MetricKey | null => {
@@ -102,10 +117,15 @@ const toMetricKey = (value: string): MetricKey | null => {
 };
 
 const normalizeResult = (data: ResultMetrics): ResultMetrics => {
-  if (data.wattage_tmp === undefined) {
+  if (data.wattage_tmp == null || !Number.isFinite(data.wattage_tmp)) {
     const melting = data.melting_wattage;
     const refining = data.refining_wattage;
-    if (typeof melting === 'number' && typeof refining === 'number') {
+    if (
+      typeof melting === 'number' &&
+      Number.isFinite(melting) &&
+      typeof refining === 'number' &&
+      Number.isFinite(refining)
+    ) {
       return { ...data, wattage_tmp: melting + refining };
     }
   }
@@ -117,9 +137,39 @@ const getFeatureUnavailableMessage = (currentFeatures: string[] | null) =>
     ? 'feature 목록을 불러오는 중입니다.'
     : 'feature 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
 
+const normalizeApiBase = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const withProtocol = trimmed.includes('://') ? trimmed : `http://${trimmed}`;
+  return withProtocol.replace(/\/+$/, '');
+};
+
+const resolveControllableFeaturesUrl = (): string => {
+  const configured = normalizeApiBase(process.env.NEXT_PUBLIC_API_BASE ?? '');
+  if (configured) {
+    return `${configured}/predict/controllable-features`;
+  }
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const rawHostname = window.location.hostname || 'localhost';
+    const hostname = rawHostname.includes(':') ? `[${rawHostname}]` : rawHostname;
+    return `${protocol}://${hostname}:8000/predict/controllable-features`;
+  }
+  return 'http://localhost:8000/predict/controllable-features';
+};
+
+const fetchControllableFeatures = async (): Promise<{ features: string[] }> => {
+  const res = await fetch(resolveControllableFeaturesUrl());
+  if (!res.ok) {
+    throw new Error('Failed to load controllable features');
+  }
+  return res.json() as Promise<{ features: string[] }>;
+};
+
 export default function Page() {
   const [sliders, setSliders] = useState<SliderItem[]>(() => createSliders());
   const [features, setFeatures] = useState<string[] | null>(null);
+  const [controllableFeatures, setControllableFeatures] = useState<string[] | null>(null);
   const [result, setResult] = useState<ResultMetrics | null>(null);
   const [resultStatusLabel, setResultStatusLabel] = useState<string | null>(null);
   const [objectiveTarget, setObjectiveTarget] = useState<MetricKey | null>(null);
@@ -131,12 +181,37 @@ export default function Page() {
   const isFeatureReady = Array.isArray(features) && features.length > 0;
 
   useEffect(() => {
-    getFeatures()
-      .then((r) => setFeatures(r.features))
-      .catch((e) => {
+    let mounted = true;
+    const loadFeatureLists = async () => {
+      try {
+        const r = await apiClient.getFeatures();
+        if (mounted) {
+          setFeatures(r.features);
+        }
+      } catch (e: unknown) {
         console.error(e);
-        setFeatures([]);
-      });
+        if (mounted) {
+          setFeatures([]);
+        }
+      }
+
+      try {
+        const r = await fetchControllableFeatures();
+        if (mounted) {
+          setControllableFeatures(r.features);
+        }
+      } catch (e: unknown) {
+        console.error(e);
+        if (mounted) {
+          setControllableFeatures([]);
+        }
+      }
+    };
+
+    void loadFeatureLists();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handlePredict = async () => {
@@ -149,7 +224,7 @@ export default function Page() {
     setIsPredicting(true);
     try {
       const payload = buildPayloadFromSliders(sliders);
-      const result = await predict(buildFeaturePayload(payload, currentFeatures));
+      const result = await apiClient.predict(buildFeaturePayload(payload, currentFeatures));
       setResult(normalizeResult(result));
       setObjectiveTarget(null);
       setObjectiveValue(null);
@@ -167,6 +242,7 @@ export default function Page() {
   const handleRecommend = async () => {
     setRecommendError(null);
     const currentFeatures = features;
+    const currentControllable = controllableFeatures;
     if (!currentFeatures || currentFeatures.length === 0) {
       setRecommendError(getFeatureUnavailableMessage(currentFeatures));
       return;
@@ -174,8 +250,17 @@ export default function Page() {
     setIsRecommending(true);
     try {
       const payload = buildPayloadFromSliders(sliders);
+      const allowedSet = new Set(
+        currentControllable && currentControllable.length > 0
+          ? currentControllable
+          : sliders.map((slider) => slider.label),
+      );
+      const optimizedSliders = sliders.filter((slider) => allowedSet.has(slider.label));
+      if (optimizedSliders.length === 0) {
+        throw new Error('No controllable features available for optimization');
+      }
       const searchSpace = Object.fromEntries(
-        sliders.map((slider) => [
+        optimizedSliders.map((slider) => [
           slider.label,
           {
             min: slider.min,
@@ -185,7 +270,11 @@ export default function Page() {
           },
         ]),
       );
-      const result = await recommend(buildFeaturePayload(payload, currentFeatures), searchSpace, 200);
+      const result = await apiClient.recommend(
+        buildFeaturePayload(payload, currentFeatures),
+        searchSpace,
+        200,
+      );
       setResult(normalizeResult(result));
       setObjectiveTarget(toMetricKey(result.objective_target));
       setObjectiveValue(result.objective_value);
